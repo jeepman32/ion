@@ -17,15 +17,15 @@ arch=$(uname -m)
 filename="$APP-$os-$arch.tar.gz"
 
 case "$filename" in
-    *"-linux-"*)
-        [[ "$arch" == "x86_64" || "$arch" == "arm64" || "$arch" == "i386" ]] || exit 1
+*"-linux-"*)
+    [[ "$arch" == "x86_64" || "$arch" == "arm64" || "$arch" == "i386" ]] || exit 1
     ;;
-    *"-mac-"*)
-        [[ "$arch" == "x86_64" || "$arch" == "arm64" ]] || exit 1
+*"-mac-"*)
+    [[ "$arch" == "x86_64" || "$arch" == "arm64" ]] || exit 1
     ;;
-    *)
-        echo "${RED}Unsupported OS/Arch: $os/$arch${NC}"
-        exit 1
+*)
+    echo "${RED}Unsupported OS/Arch: $os/$arch${NC}"
+    exit 1
     ;;
 esac
 
@@ -46,9 +46,9 @@ print_message() {
     local color=""
 
     case $level in
-        info) color="${GREEN}" ;;
-        warning) color="${YELLOW}" ;;
-        error) color="${RED}" ;;
+    info) color="${GREEN}" ;;
+    warning) color="${YELLOW}" ;;
+    error) color="${RED}" ;;
     esac
 
     echo -e "${color}${message}${NC}"
@@ -57,11 +57,15 @@ print_message() {
 check_version() {
     if command -v sst >/dev/null 2>&1; then
         sst_path=$(which sst)
-        sst_shebang=$(cat $sst_path | head -n1)
+        sst_is_binary=$(grep '^' $sst_path)
 
-        if [[ "$sst_shebang" == "#!/usr/bin/env node" ]]; then
-            print_message error "SST v2 is installed globally through npm. You'll need to uninstall it before proceeding."
-            exit 1
+        if [[ sst_is_binary = false ]]; then
+            sst_shebang=$(cat $sst_path | head -n1)
+
+            if [[ "$sst_shebang" == "#!/usr/bin/env node" ]]; then
+                print_message error "SST v2 is installed globally through npm. You'll need to uninstall it before proceeding."
+                exit 1
+            fi
         fi
 
         installed_version=$(sst version)
@@ -96,10 +100,10 @@ download_and_install
 add_to_path() {
     local config_file=$1
     local command=$2
-    
+
     if [[ -w $config_file ]]; then
-        echo -e "\n# sst" >> "$config_file"
-        echo "$command" >> "$config_file"
+        echo -e "\n# sst" >>"$config_file"
+        echo "$command" >>"$config_file"
         print_message info "Successfully added ${ORANGE}SST ❍ ion ${GREEN}to \$PATH in $config_file"
     else
         print_message warning "Manually add the directory to $config_file (or similar):"
@@ -111,18 +115,18 @@ XDG_CONFIG_HOME=${XDG_CONFIG_HOME:-$HOME/.config}
 
 current_shell=$(basename "$SHELL")
 case $current_shell in
-    fish)
-        config_files="$HOME/.config/fish/config.fish"
+fish)
+    config_files="$HOME/.config/fish/config.fish"
     ;;
-    zsh)
-        config_files="$HOME/.zshrc $HOME/.zshenv $XDG_CONFIG_HOME/zsh/.zshrc $XDG_CONFIG_HOME/zsh/.zshenv"
+zsh)
+    config_files="$HOME/.zshrc $HOME/.zshenv $XDG_CONFIG_HOME/zsh/.zshrc $XDG_CONFIG_HOME/zsh/.zshenv"
     ;;
-    bash)
-        config_files="$HOME/.bashrc $HOME/.bash_profile $XDG_CONFIG_HOME/bash/.bashrc $XDG_CONFIG_HOME/bash/.bash_profile"
+bash)
+    config_files="$HOME/.bashrc $HOME/.bash_profile $XDG_CONFIG_HOME/bash/.bashrc $XDG_CONFIG_HOME/bash/.bash_profile"
     ;;
-    *)
-        # Default case if none of the above matches
-        config_files="$HOME/.bashrc $HOME/.bash_profile $XDG_CONFIG_HOME/bash/.bashrc $XDG_CONFIG_HOME/bash/.bash_profile"
+*)
+    # Default case if none of the above matches
+    config_files="$HOME/.bashrc $HOME/.bash_profile $XDG_CONFIG_HOME/bash/.bashrc $XDG_CONFIG_HOME/bash/.bash_profile"
     ;;
 esac
 
@@ -141,23 +145,23 @@ fi
 
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     case $current_shell in
-        fish)
-            add_to_path "$config_file" "fish_add_path $INSTALL_DIR"
+    fish)
+        add_to_path "$config_file" "fish_add_path $INSTALL_DIR"
         ;;
-        zsh)
-            add_to_path "$config_file" "export PATH=$INSTALL_DIR:\$PATH"
+    zsh)
+        add_to_path "$config_file" "export PATH=$INSTALL_DIR:\$PATH"
         ;;
-        bash)
-            add_to_path "$config_file" "export PATH=$INSTALL_DIR:\$PATH"
+    bash)
+        add_to_path "$config_file" "export PATH=$INSTALL_DIR:\$PATH"
         ;;
-        *)
-            print_message warning "Manually add the directory to $config_file (or similar):"
-            print_message info "  export PATH=$INSTALL_DIR:\$PATH"
+    *)
+        print_message warning "Manually add the directory to $config_file (or similar):"
+        print_message info "  export PATH=$INSTALL_DIR:\$PATH"
         ;;
     esac
 fi
 
 if [ -n "${GITHUB_ACTIONS-}" ] && [ "${GITHUB_ACTIONS}" == "true" ]; then
-    echo "$INSTALL_DIR" >> $GITHUB_PATH
+    echo "$INSTALL_DIR" >>$GITHUB_PATH
     print_message info "Added $INSTALL_DIR to \$GITHUB_PATH"
 fi
