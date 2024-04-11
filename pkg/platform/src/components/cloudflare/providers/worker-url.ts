@@ -56,13 +56,14 @@ class Provider implements dynamic.ResourceProvider {
 
   async getWorkerDevSubdomain(inputs: Inputs) {
     try {
-      const ret = await cfFetch<{ subdomain: string }>(
-        `/accounts/${inputs.accountId}/workers/subdomain`,
-        {
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-      return ret.result.subdomain;
+      // const ret = await cfFetch<{ subdomain: string }>(
+      //   `/accounts/${inputs.accountId}/workers/subdomain`,
+      //   {
+      //     headers: { "Content-Type": "application/json" },
+      //   },
+      // );
+      // return ret.subdomain;
+      return "workers.dev"
     } catch (error: any) {
       console.log(error);
       throw error;
@@ -71,14 +72,14 @@ class Provider implements dynamic.ResourceProvider {
 
   async setEnabledFlag(inputs: Inputs) {
     try {
-      await cfFetch(
-        `/accounts/${inputs.accountId}/workers/scripts/${inputs.scriptName}/subdomain`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ enabled: inputs.enabled }),
-        },
-      );
+      // const ret = await cfFetch(
+      //   `/accounts/${inputs.accountId}/workers/scripts/${inputs.scriptName}/subdomain`,
+      //   {
+      //     method: "POST",
+      //     headers: { "Content-Type": "application/json" },
+      //     body: JSON.stringify({ enabled: inputs.enabled }),
+      //   },
+      // );
       // Add a delay when the subdomain is first created.
       // This is to prevent an issue where a negative cache-hit
       // causes the subdomain to be unavailable for 30 seconds.
