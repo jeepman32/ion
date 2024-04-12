@@ -13,8 +13,8 @@ import {
   output,
 } from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import { Size } from "./size.js";
-import { Function } from "./aws/function.js";
+import { Size } from "../size.js";
+import { Function } from "../aws/function.js";
 import {
   Plan,
   SsrSiteArgs,
@@ -22,21 +22,21 @@ import {
   prepare,
   useCloudFrontFunctionHostHeaderInjection,
   validatePlan,
-} from "./aws/ssr-site.js";
-import { Cdn } from "./aws/cdn.js";
-import { bootstrap } from "./aws/helpers/bootstrap.js";
-import { Bucket } from "./aws/bucket.js";
-import { Component, transform } from "./component.js";
-import { sanitizeToPascalCase } from "./naming.js";
-import { Hint } from "./hint.js";
-import { Link } from "./link.js";
-import { VisibleError } from "./error.js";
-import type { Input } from "./input.js";
-import { Cache } from "./aws/providers/cache.js";
-import { Queue } from "./aws/queue.js";
-import { Worker } from "./cloudflare/worker.js";
-import { KvData } from "./cloudflare/providers/kv-data.js";
-import {Bucket as R2Bucket} from "./cloudflare/bucket.js"
+} from "../aws/ssr-site.js";
+import { Cdn } from "../aws/cdn.js";
+import { bootstrap } from "../aws/helpers/bootstrap.js";
+import { Bucket } from "../aws/bucket.js";
+import { Component, transform } from "../component.js";
+import { sanitizeToPascalCase } from "../naming.js";
+import { Hint } from "../hint.js";
+import { Link } from "../link.js";
+import { VisibleError } from "../error.js";
+import type { Input } from "../input.js";
+import { Cache } from "../aws/providers/cache.js";
+import { Queue } from "../aws/queue.js";
+import { Worker } from "./worker.js";
+import { KvData } from "./providers/kv-data.js";
+import { Bucket as R2Bucket } from "./bucket.js";
 
 const LAYER_VERSION = "2";
 const DEFAULT_OPEN_NEXT_VERSION = "3.0.0-rc.10";
@@ -456,10 +456,10 @@ export function createServersAndDistribution(
   plan: Input<Plan>,
 ) {
   return all([outputPath, plan]).apply(([outputPath, plan]) => {
-    const ssrFunctions = [] as Function[]
+    const ssrFunctions = [] as Function[];
     const origins = buildOrigins();
 
-    return {origins, ssrFunctions}
+    return { origins, ssrFunctions };
 
     function buildOrigins() {
       const origins: Record<
@@ -513,7 +513,7 @@ export function createServersAndDistribution(
       );
       ssrFunctions.push(fn);
 
-      return fn.url.apply(url => ({
+      return fn.url.apply((url) => ({
         originId: fnName,
         domainName: new URL(url!).host,
         customOriginConfig: {
@@ -526,10 +526,7 @@ export function createServersAndDistribution(
       }));
     }
 
-    function buildImageOptimizationOrigin(
-      fnName: string,
-      props: any,
-    ) {
+    function buildImageOptimizationOrigin(fnName: string, props: any) {
       const fn = new Function(
         `${name}${sanitizeToPascalCase(fnName)}`,
         {
@@ -552,7 +549,7 @@ export function createServersAndDistribution(
         { parent },
       );
 
-      return fn.url.apply(url => ({
+      return fn.url.apply((url) => ({
         originId: fnName,
         domainName: new URL(url!).host,
         customOriginConfig: {
@@ -564,7 +561,7 @@ export function createServersAndDistribution(
         },
       }));
     }
-  })
+  });
 }
 
 export class NextjsCloudflare extends Component implements Link.Linkable {
@@ -593,7 +590,7 @@ export class NextjsCloudflare extends Component implements Link.Linkable {
     const logging = normalizeLogging();
     const buildCommand = normalizeBuildCommand();
     const { sitePath, partition, region } = prepare(args, opts);
-    const bucket = new Bucket(`${name}Cache`)
+    const bucket = new Bucket(`${name}Cache`);
     const outputPath = buildApp(name, args, sitePath, buildCommand);
     const {
       openNextOutput,
@@ -608,16 +605,15 @@ export class NextjsCloudflare extends Component implements Link.Linkable {
     const revalidationTable = createRevalidationTable();
     createRevalidationTableSeeder();
     const plan = buildPlan();
-    const {origins, ssrFunctions} =
-      createServersAndDistribution(
-        parent,
-        name,
-        args,
-        outputPath,
-        bucket,
-        plan,
-      );
-    const serverFunction = ssrFunctions[0]
+    const { origins, ssrFunctions } = createServersAndDistribution(
+      parent,
+      name,
+      args,
+      outputPath,
+      bucket,
+      plan,
+    );
+    const serverFunction = ssrFunctions[0];
 
     // Handle per-route logging
     // disableDefaultLogging();
@@ -639,9 +635,8 @@ export class NextjsCloudflare extends Component implements Link.Linkable {
     const assetManifest = generateAssetManifest();
     //TODO: upload data
     // const kvData = uploadAssets();
-    const middleware = createMiddleware()
-    this.router = createRouter()
-
+    const middleware = createMiddleware();
+    this.router = createRouter();
 
     this.registerOutputs({
       _metadata: {
@@ -653,13 +648,10 @@ export class NextjsCloudflare extends Component implements Link.Linkable {
       },
     });
 
-    
-
     function generateAssetManifest() {
       return all([outputPath, args.assets, plan]).apply(
         async ([outputPath, assets, plan]) => {
           // Build fileOptions
-          
 
           // Upload files based on fileOptions
           const manifest = [];
@@ -689,41 +681,38 @@ export class NextjsCloudflare extends Component implements Link.Linkable {
                     ]
                   : []),
               ];
-            const filesProcessed: string[] = [];
-            for (const fileOption of fileOptions.reverse()) {
-              
-              const files = globSync(fileOption.files, {
-                cwd: path.resolve(outputPath, copy.from),
-                nodir: true,
-                dot: true,
-                ignore: fileOption.ignore,
-              }).filter((file) => !filesProcessed.includes(file));
-              filesProcessed.push(...files);
+              const filesProcessed: string[] = [];
+              for (const fileOption of fileOptions.reverse()) {
+                const files = globSync(fileOption.files, {
+                  cwd: path.resolve(outputPath, copy.from),
+                  nodir: true,
+                  dot: true,
+                  ignore: fileOption.ignore,
+                }).filter((file) => !filesProcessed.includes(file));
+                filesProcessed.push(...files);
 
-              manifest.push(
-                ...(await Promise.all(
-                  files.map(async (file) => {
-                    const source = path.resolve(outputPath, copy.from, file);
-                    const content = await fs.promises.readFile(source);
-                    const hash = crypto
-                      .createHash("sha256")
-                      .update(content)
-                      .digest("hex");
-                    return {
-                      source,
-                      key: path.posix.join(copy.to, file),
-                      hash,
-                      cacheControl: fileOption.cacheControl,
-                      contentType: getContentType(file, "UTF-8"),
-                    };
-                  }),
-                )),
-              );
+                manifest.push(
+                  ...(await Promise.all(
+                    files.map(async (file) => {
+                      const source = path.resolve(outputPath, copy.from, file);
+                      const content = await fs.promises.readFile(source);
+                      const hash = crypto
+                        .createHash("sha256")
+                        .update(content)
+                        .digest("hex");
+                      return {
+                        source,
+                        key: path.posix.join(copy.to, file),
+                        hash,
+                        cacheControl: fileOption.cacheControl,
+                        contentType: getContentType(file, "UTF-8"),
+                      };
+                    }),
+                  )),
+                );
+              }
             }
           }
-          
-          }
-          
 
           return manifest;
         },
@@ -804,58 +793,68 @@ export class NextjsCloudflare extends Component implements Link.Linkable {
           },
           transform: {
             worker: (workerArgs) => {
-              workerArgs.r2BucketBindings = [
+              (workerArgs.r2BucketBindings = [
                 {
-                  'name': 'ASSETS',
+                  name: "ASSETS",
                   bucketName: storage.name,
-
-                }
-              ],
-              workerArgs.serviceBindings = [
-                {
-                  name: "middleware",
-                  service: middleware.name
-                }
-              ]
+                },
+              ]),
+                (workerArgs.serviceBindings = [
+                  {
+                    name: "middleware",
+                    service: middleware.name,
+                  },
+                ]);
             },
           },
         },
         // create distribution after s3 upload finishes
-        { dependsOn: [storage.nodes.bucket, middleware.nodes.worker],  parent },
+        { dependsOn: [storage.nodes.bucket, middleware.nodes.worker], parent },
       );
     }
 
     function createMiddleware() {
-      const openNextOrigin = origins.apply((origins) : Record<string, {
-        host: Output<string>,
-        protocol: string,
-      }> => {
-        const r = Object.entries(origins).map(([key, value]) => {
-          return [key, {
-              host: value.domainName,
-              protocol: "https",
-            }
-            ]
-        })
-        return Object.fromEntries(r)
-      })
+      const openNextOrigin = origins.apply(
+        (
+          origins,
+        ): Record<
+          string,
+          {
+            host: Output<string>;
+            protocol: string;
+          }
+        > => {
+          const r = Object.entries(origins).map(([key, value]) => {
+            return [
+              key,
+              {
+                host: value.domainName,
+                protocol: "https",
+              },
+            ];
+          });
+          return Object.fromEntries(r);
+        },
+      );
       return new Worker(
         `${name}Middleware`,
         {
           url: true,
-          handler: all([openNextOutput, outputPath]).apply(([openNextOutput, outputPath]) => {
-            return path.join(
-              outputPath,
-              openNextOutput.edgeFunctions.middleware.bundle,
-              "handler.mjs"
-            )
-          }),
+          handler: all([openNextOutput, outputPath]).apply(
+            ([openNextOutput, outputPath]) => {
+              return path.join(
+                outputPath,
+                openNextOutput.edgeFunctions.middleware.bundle,
+                "handler.mjs",
+              );
+            },
+          ),
           environment: {
             OPEN_NEXT_ORIGIN: jsonStringify(openNextOrigin),
           },
         },
         // create distribution after s3 upload finishes
-        {  parent },
+        { parent },
       );
     }
 
@@ -1186,9 +1185,7 @@ export class NextjsCloudflare extends Component implements Link.Linkable {
             edge: false,
             cloudFrontFunctions: {
               serverCfFunction: {
-                injections: [
-                  useCloudFrontFunctionHostHeaderInjection(),
-                ],
+                injections: [useCloudFrontFunctionHostHeaderInjection()],
               },
             },
             edgeFunctions: Object.fromEntries(
@@ -1254,10 +1251,7 @@ export class NextjsCloudflare extends Component implements Link.Linkable {
                         ...defaultFunctionProps,
                       },
                       streaming: value.streaming,
-                      injections:
-                        logging === "per-route"
-                          ? []
-                          : [],
+                      injections: logging === "per-route" ? [] : [],
                     },
                   },
                 ];
@@ -1444,7 +1438,6 @@ export class NextjsCloudflare extends Component implements Link.Linkable {
         },
       );
     }
-
   }
 
   /**
