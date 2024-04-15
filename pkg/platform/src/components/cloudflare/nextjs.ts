@@ -7,35 +7,38 @@ import {
   ComponentResourceOptions,
   Output,
   all,
-  asset,
   interpolate,
   jsonStringify,
   output,
 } from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
-import { Size } from "../size.js";
+
 import { Function } from "../aws/function.js";
+// import { Cdn } from "../aws/cdn.js";
+// import { bootstrap } from "../aws/helpers/bootstrap.js";
+import { Bucket as S3Bucket } from "../aws/bucket.js";
+import { Cache } from "../aws/providers/cache.js";
+import { Queue } from "../aws/queue.js";
+
+import { buildApp } from "../base/base-ssr-site.js";
 import {
   Plan,
   SsrSiteArgs,
-  buildApp,
   prepare,
   useCloudFrontFunctionHostHeaderInjection,
   validatePlan,
 } from "../aws/ssr-site.js";
-import { Cdn } from "../aws/cdn.js";
-import { bootstrap } from "../aws/helpers/bootstrap.js";
-import { Bucket } from "../aws/bucket.js";
+
+import { Size } from "../size.js";
 import { Component, transform } from "../component.js";
 import { sanitizeToPascalCase } from "../naming.js";
-import { Hint } from "../hint.js";
+// import { Hint } from "../hint.js";
 import { Link } from "../link.js";
 import { VisibleError } from "../error.js";
 import type { Input } from "../input.js";
-import { Cache } from "../aws/providers/cache.js";
-import { Queue } from "../aws/queue.js";
+
 import { Worker } from "./worker.js";
-import { KvData } from "./providers/kv-data.js";
+// import { KvData } from "./providers/kv-data.js";
 import { Bucket as R2Bucket } from "./bucket.js";
 
 const LAYER_VERSION = "2";
@@ -452,7 +455,7 @@ export function createServersAndDistribution(
   name: string,
   args: SsrSiteArgs,
   outputPath: Output<string>,
-  bucket: Bucket,
+  bucket: S3Bucket,
   plan: Input<Plan>,
 ) {
   return all([outputPath, plan]).apply(([outputPath, plan]) => {
@@ -564,9 +567,9 @@ export function createServersAndDistribution(
   });
 }
 
-export class NextjsCloudflare extends Component implements Link.Linkable {
+export class Nextjs extends Component implements Link.Linkable {
   // private cdn: Output<Cdn>;
-  private assets: Bucket;
+  private assets: S3Bucket;
   private router: Worker;
   private server: Output<Function>;
 
@@ -590,7 +593,7 @@ export class NextjsCloudflare extends Component implements Link.Linkable {
     const logging = normalizeLogging();
     const buildCommand = normalizeBuildCommand();
     const { sitePath, partition, region } = prepare(args, opts);
-    const bucket = new Bucket(`${name}Cache`);
+    const bucket = new S3Bucket(`${name}Cache`);
     const outputPath = buildApp(name, args, sitePath, buildCommand);
     const {
       openNextOutput,

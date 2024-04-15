@@ -8,11 +8,11 @@ export interface BucketArgs {
    * [Transform](/docs/components#transform/) how this component creates its underlying
    * resources.
    */
-  transform?: {
+  transform: {
     /**
      * Transform the R2 Bucket resource.
      */
-    bucket?: Transform<cloudflare.R2BucketArgs>;
+    bucket: Transform<cloudflare.R2BucketArgs>;
   };
 }
 
@@ -71,15 +71,10 @@ export interface BucketArgs {
 export class Bucket extends Component implements Link.Cloudflare.Linkable {
   private bucket: cloudflare.R2Bucket;
 
-  constructor(
-    name: string,
-    args?: BucketArgs,
-    opts?: ComponentResourceOptions,
-  ) {
+  constructor(name: string, args: BucketArgs, opts?: ComponentResourceOptions) {
     super(__pulumiType, name, args, opts);
 
     const parent = this;
-
     const bucket = createBucket();
 
     this.bucket = bucket;
@@ -87,7 +82,7 @@ export class Bucket extends Component implements Link.Cloudflare.Linkable {
     function createBucket() {
       return new cloudflare.R2Bucket(
         `${name}Bucket`,
-        transform(args?.transform?.bucket, {
+        transform(args.transform.bucket, {
           name,
           accountId: sst.cloudflare.DEFAULT_ACCOUNT_ID,
         }),

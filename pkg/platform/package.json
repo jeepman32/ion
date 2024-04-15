@@ -22,6 +22,7 @@
     "@aws-sdk/client-ssm": "3.478.0",
     "@aws-sdk/client-sts": "3.478.0",
     "@aws-sdk/middleware-retry": "3.374.0",
+    "@cloudflare/workers-types": "^4.20240320.1",
     "@pulumi/aws": "6.28.1",
     "@pulumi/cloudflare": "5.24.1",
     "@pulumi/pulumi": "3.112.0",
@@ -29,15 +30,16 @@
     "@pulumi/tls": "5.0.1",
     "@smithy/smithy-client": "2.1.18",
     "@types/node": "^20.10.5",
-    "acorn": "8.11.3",
     "acorn-walk": "8.3.2",
+    "acorn": "8.11.3",
     "archiver": "6.0.1",
     "astro-sst": "2.40.1",
     "esbuild": "0.19.10",
     "glob": "10.3.10",
     "path-to-regexp": "6.2.1",
     "prettier": "3.1.1",
-    "typescript": "5.3.3"
+    "typescript": "5.3.3",
+    "undici": "^6.10.1"
   },
   "devDependencies": {
     "@aws-sdk/client-iot": "3.501.0",
