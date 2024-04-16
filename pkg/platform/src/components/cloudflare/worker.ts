@@ -150,7 +150,7 @@ export interface WorkerArgs {
    */
   environment?: Input<Record<string, Input<string>>>;
   /**
-   * [Transform](/docs/components#transform/) how this component creates its underlying
+   * [Transform](/docs/components/#transform) how this component creates its underlying
    * resources.
    */
   transform?: {
@@ -383,11 +383,11 @@ export class Worker extends Component implements Link.Cloudflare.Linkable {
               plainTextBindings: [
                 ...(iamCredentials
                   ? [
-                      {
-                        name: "AWS_ACCESS_KEY_ID",
-                        text: iamCredentials.id,
-                      },
-                    ]
+                    {
+                      name: "AWS_ACCESS_KEY_ID",
+                      text: iamCredentials.id,
+                    },
+                  ]
                   : []),
                 ...Object.entries(environment ?? {}).map(([key, value]) => ({
                   name: key,
@@ -398,11 +398,11 @@ export class Worker extends Component implements Link.Cloudflare.Linkable {
               secretTextBindings: [
                 ...(iamCredentials
                   ? [
-                      {
-                        name: "AWS_SECRET_ACCESS_KEY",
-                        text: iamCredentials.secret,
-                      },
-                    ]
+                    {
+                      name: "AWS_SECRET_ACCESS_KEY",
+                      text: iamCredentials.secret,
+                    },
+                  ]
                   : []),
                 ...(bindings.secretTextBindings || []),
               ],
