@@ -465,6 +465,13 @@ export class Worker extends Component implements Link.Cloudflare.Linkable {
   }
 
   /**
+   * The Worker name.
+   */
+  public get name() {
+    return this.script.name;
+  }
+
+  /**
    * @internal
    */
   public getCloudflareBinding(): Link.Cloudflare.Binding {

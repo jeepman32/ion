@@ -11,8 +11,9 @@ import { BaseSsrSiteArgs } from "../base/base-ssr-site.js";
 import { Kv, KvArgs } from "./kv.js";
 import { Worker, WorkerArgs } from "./worker.js";
 import { KvData } from "./providers/kv-data.js";
+import { Ruleset } from "@pulumi/cloudflare";
 
-type Plan = ReturnType<typeof validatePlan>;
+export type Plan = ReturnType<typeof validatePlan>;
 export interface SsrSiteArgs extends BaseSsrSiteArgs {
   domain?: Input<string>;
   /**
@@ -291,4 +292,43 @@ export function validatePlan(input: {
   }[];
 }) {
   return input;
+}
+
+export function createCacheRuleset(
+  name: string,
+  headers: string[],
+  parent: ComponentResource,
+) {
+  return new Ruleset(
+    name,
+    {
+      name,
+      description:
+        "A custom ruleset included by SST as part of a NextJS deployment. It is required to ensure that certain NextJS specific requests are not cached, and are passed through to Workers transparently.",
+      kind: "custom",
+      phase: "httpRequestCacheSettings",
+      accountId: sst.cloudflare.DEFAULT_ACCOUNT_ID,
+      rules: [
+        {
+          action: "set_cache_settings",
+          actionParameters: {
+            // Skip caching these requests
+            cache: false,
+          },
+          // Take the headers we want to disable caching for, map them into a Cloudflare rule, then join them with " or ",
+          // transforming them into something like: http.request.headers contains "foo" or http.request.headers contains "bar"
+          expression: headers
+            .map(
+              (headerName) => `http.request.headers contains "${headerName}"`,
+            )
+            .join(" or "),
+          // Turn the rule on, always? Not sure.
+          enabled: true,
+        },
+      ],
+    },
+    {
+      parent,
+    },
+  );
 }
