@@ -487,6 +487,13 @@ export class Worker
   }
 
   /**
+   * The Worker name.
+   */
+  public get name() {
+    return this.script.name;
+  }
+
+  /**
    * @internal
    */
   public getCloudflareBinding(): Link.Cloudflare.Binding {
