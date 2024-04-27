@@ -25,16 +25,8 @@ import { Cache } from "./providers/cache.js";
 import { Queue } from "./queue.js";
 import { buildApp } from "../base/base-ssr-site.js";
 
-const DEFAULT_OPEN_NEXT_VERSION = "3.0.0-rc.11";
-const DEFAULT_CACHE_POLICY_ALLOWED_HEADERS = [
-  "accept",
-  "x-prerender-revalidate",
-  "x-prerender-bypass",
-  "rsc",
-  "next-router-prefetch",
-  "next-router-state-tree",
-  "next-url",
-];
+const DEFAULT_OPEN_NEXT_VERSION = "3.0.0-rc.16";
+const DEFAULT_CACHE_POLICY_ALLOWED_HEADERS = ["x-open-next-cache-key"];
 
 type BaseFunction = {
   handler: string;
@@ -350,6 +342,20 @@ export interface NextjsArgs extends SsrSiteArgs {
      * ```
      */
     memory?: Size;
+    /**
+     * If set to true, already computed image will return 304 Not Modified.
+     * This means that image needs to be **immutable**, the etag will be computed
+     * based on the image href, format and width and the next BUILD_ID.
+     * @default false
+     * @example
+     * ```js
+     * {
+     *   imageOptimization: {
+     *     staticEtag: true,
+     *   }
+     * }
+     */
+    staticEtag?: boolean;
   };
 }
 
@@ -466,8 +472,8 @@ export class Nextjs extends Component implements Link.Linkable {
       _hint: $dev
         ? undefined
         : all([this.cdn.domainUrl, this.cdn.url]).apply(
-          ([domainUrl, url]) => domainUrl ?? url,
-        ),
+            ([domainUrl, url]) => domainUrl ?? url,
+          ),
       _metadata: {
         mode: $dev ? "placeholder" : "deployed",
         path: sitePath,
@@ -749,39 +755,39 @@ export class Nextjs extends Component implements Link.Linkable {
               },
               ...(revalidationQueueArn
                 ? [
-                  {
-                    actions: [
-                      "sqs:SendMessage",
-                      "sqs:GetQueueAttributes",
-                      "sqs:GetQueueUrl",
-                    ],
-                    resources: [revalidationQueueArn],
-                  },
-                ]
+                    {
+                      actions: [
+                        "sqs:SendMessage",
+                        "sqs:GetQueueAttributes",
+                        "sqs:GetQueueUrl",
+                      ],
+                      resources: [revalidationQueueArn],
+                    },
+                  ]
                 : []),
               ...(revalidationTableArn
                 ? [
-                  {
-                    actions: [
-                      "dynamodb:BatchGetItem",
-                      "dynamodb:GetRecords",
-                      "dynamodb:GetShardIterator",
-                      "dynamodb:Query",
-                      "dynamodb:GetItem",
-                      "dynamodb:Scan",
-                      "dynamodb:ConditionCheckItem",
-                      "dynamodb:BatchWriteItem",
-                      "dynamodb:PutItem",
-                      "dynamodb:UpdateItem",
-                      "dynamodb:DeleteItem",
-                      "dynamodb:DescribeTable",
-                    ],
-                    resources: [
-                      revalidationTableArn,
-                      `${revalidationTableArn}/*`,
-                    ],
-                  },
-                ]
+                    {
+                      actions: [
+                        "dynamodb:BatchGetItem",
+                        "dynamodb:GetRecords",
+                        "dynamodb:GetShardIterator",
+                        "dynamodb:Query",
+                        "dynamodb:GetItem",
+                        "dynamodb:Scan",
+                        "dynamodb:ConditionCheckItem",
+                        "dynamodb:BatchWriteItem",
+                        "dynamodb:PutItem",
+                        "dynamodb:UpdateItem",
+                        "dynamodb:DeleteItem",
+                        "dynamodb:DescribeTable",
+                      ],
+                      resources: [
+                        revalidationTableArn,
+                        `${revalidationTableArn}/*`,
+                      ],
+                    },
+                  ]
                 : []),
             ],
           };
@@ -792,7 +798,8 @@ export class Nextjs extends Component implements Link.Linkable {
               serverCfFunction: {
                 injections: [
                   useCloudFrontFunctionHostHeaderInjection(),
-                  useCloudFrontFunctionPrerenderBypassHeaderInjection(),
+                  useCloudFrontFunctionCacheHeaderKey(),
+                  useCloudfrontGeoHeadersInjection(),
                 ],
               },
             },
@@ -840,6 +847,9 @@ export class Nextjs extends Component implements Link.Linkable {
                           environment: {
                             BUCKET_NAME: bucketName,
                             BUCKET_KEY_PREFIX: "_assets",
+                            ...(imageOptimization?.staticEtag
+                              ? { OPENNEXT_STATIC_ETAG: "true" }
+                              : {}),
                           },
                           memory: imageOptimization?.memory ?? "1536 MB",
                         },
