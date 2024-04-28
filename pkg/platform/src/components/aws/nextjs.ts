@@ -18,7 +18,6 @@ import {
 import { Cdn } from "./cdn.js";
 import { Bucket } from "./bucket.js";
 import { Component } from "../component.js";
-import { Hint } from "../hint.js";
 import { Link } from "../link.js";
 import { VisibleError } from "../error.js";
 import type { Input } from "../input.js";
@@ -420,29 +419,12 @@ export class Nextjs extends Component implements Link.Linkable {
   ) {
     super(__pulumiType, name, args, opts);
 
-    let _routes: Output<
-      ({
-        route: string;
-        logGroupPath: string;
-        sourcemapPath?: string;
-        sourcemapKey?: string;
-      } & ({ regexMatch: string } | { prefixMatch: string }))[]
-    >;
-
     const parent = this;
     const buildCommand = normalizeBuildCommand();
     const { sitePath, partition, region } = prepare(args, opts);
     const { access, bucket } = createBucket(parent, name, partition, args);
     const outputPath = buildApp(name, args, sitePath, buildCommand);
-    const {
-      openNextOutput,
-      buildId,
-      routesManifest,
-      appPathRoutesManifest,
-      appPathsManifest,
-      pagesManifest,
-      prerenderManifest,
-    } = loadBuildOutput();
+    const { openNextOutput, buildId, prerenderManifest } = loadBuildOutput();
     const revalidationQueue = createRevalidationQueue();
     const revalidationTable = createRevalidationTable();
     createRevalidationTableSeeder();
@@ -1067,167 +1049,13 @@ export class Nextjs extends Component implements Link.Linkable {
       });
     }
 
-    function useRoutes() {
-      if (_routes) return _routes;
-
-      _routes = all([
-        outputPath,
-        routesManifest,
-        appPathRoutesManifest,
-        appPathsManifest,
-        pagesManifest,
-      ]).apply(
-        ([
-          outputPath,
-          routesManifest,
-          appPathRoutesManifest,
-          appPathsManifest,
-          pagesManifest,
-        ]) => {
-          const dynamicAndStaticRoutes = [
-            ...routesManifest.dynamicRoutes,
-            ...routesManifest.staticRoutes,
-          ].map(({ page, regex }) => {
-            const cwRoute = buildCloudWatchRouteName(page);
-            const cwHash = buildCloudWatchRouteHash(page);
-            const sourcemapPath =
-              getSourcemapForAppRoute(page) || getSourcemapForPagesRoute(page);
-            return {
-              route: page,
-              regexMatch: regex,
-              logGroupPath: `/${cwHash}${cwRoute}`,
-              sourcemapPath: sourcemapPath,
-              sourcemapKey: cwHash,
-            };
-          });
-
-          // Some app routes are not in the routes manifest, so we need to add them
-          // ie. app/api/route.ts => IS NOT in the routes manifest
-          //     app/items/[slug]/route.ts => IS in the routes manifest (dynamicRoutes)
-          const appRoutes = Object.values(appPathRoutesManifest)
-            .filter(
-              (page) =>
-                routesManifest.dynamicRoutes.every(
-                  (route) => route.page !== page,
-                ) &&
-                routesManifest.staticRoutes.every(
-                  (route) => route.page !== page,
-                ),
-            )
-            .map((page) => {
-              const cwRoute = buildCloudWatchRouteName(page);
-              const cwHash = buildCloudWatchRouteHash(page);
-              const sourcemapPath = getSourcemapForAppRoute(page);
-              return {
-                route: page,
-                prefixMatch: page,
-                logGroupPath: `/${cwHash}${cwRoute}`,
-                sourcemapPath: sourcemapPath,
-                sourcemapKey: cwHash,
-              };
-            });
-
-          const dataRoutes = (routesManifest.dataRoutes || []).map(
-            ({ page, dataRouteRegex }) => {
-              const routeDisplayName = page.endsWith("/")
-                ? `/_next/data/BUILD_ID${page}index.json`
-                : `/_next/data/BUILD_ID${page}.json`;
-              const cwRoute = buildCloudWatchRouteName(routeDisplayName);
-              const cwHash = buildCloudWatchRouteHash(page);
-              return {
-                route: routeDisplayName,
-                regexMatch: dataRouteRegex,
-                logGroupPath: `/${cwHash}${cwRoute}`,
-              };
-            },
-          );
-
-          return [
-            ...[...dynamicAndStaticRoutes, ...appRoutes].sort((a, b) =>
-              a.route.localeCompare(b.route),
-            ),
-            ...dataRoutes.sort((a, b) => a.route.localeCompare(b.route)),
-          ];
-
-          function getSourcemapForAppRoute(page: string) {
-            // Step 1: look up in "appPathRoutesManifest" to find the key with
-            //         value equal to the page
-            // {
-            //   "/_not-found": "/_not-found",
-            //   "/about/page": "/about",
-            //   "/about/profile/page": "/about/profile",
-            //   "/page": "/",
-            //   "/favicon.ico/route": "/favicon.ico"
-            // }
-            const appPathRoute = Object.keys(appPathRoutesManifest).find(
-              (key) => appPathRoutesManifest[key] === page,
-            );
-            if (!appPathRoute) return;
-
-            // Step 2: look up in "appPathsManifest" to find the file with key equal
-            //         to the page
-            // {
-            //   "/_not-found": "app/_not-found.js",
-            //   "/about/page": "app/about/page.js",
-            //   "/about/profile/page": "app/about/profile/page.js",
-            //   "/page": "app/page.js",
-            //   "/favicon.ico/route": "app/favicon.ico/route.js"
-            // }
-            const filePath = appPathsManifest[appPathRoute];
-            if (!filePath) return;
-
-            // Step 3: check the .map file exists
-            const sourcemapPath = path.join(
-              outputPath,
-              ".next",
-              "server",
-              `${filePath}.map`,
-            );
-            if (!fs.existsSync(sourcemapPath)) return;
-
-            return sourcemapPath;
-          }
-
-          function getSourcemapForPagesRoute(page: string) {
-            // Step 1: look up in "pathsManifest" to find the file with key equal
-            //         to the page
-            // {
-            //   "/_app": "pages/_app.js",
-            //   "/_error": "pages/_error.js",
-            //   "/404": "pages/404.html",
-            //   "/api/hello": "pages/api/hello.js",
-            //   "/api/auth/[...nextauth]": "pages/api/auth/[...nextauth].js",
-            //   "/api/next-auth-restricted": "pages/api/next-auth-restricted.js",
-            //   "/": "pages/index.js",
-            //   "/ssr": "pages/ssr.js"
-            // }
-            const filePath = pagesManifest[page];
-            if (!filePath) return;
-
-            // Step 2: check the .map file exists
-            const sourcemapPath = path.join(
-              outputPath,
-              ".next",
-              "server",
-              `${filePath}.map`,
-            );
-            if (!fs.existsSync(sourcemapPath)) return;
-
-            return sourcemapPath;
-          }
-        },
-      );
-
-      return _routes;
-    }
-
     function useCloudFrontFunctionPrerenderBypassHeaderInjection() {
       // In Next.js page router preview mode (depends on the cookie __prerender_bypass),
       // to ensure we receive the cached page instead of the preview version, we set the
       // header "x-prerender-bypass", and add it to cache policy's allowed headers.
       return `
-  if (request.cookies["__prerender_bypass"]) { 
-    request.headers["x-prerender-bypass"] = { value: "true" }; 
+  if (request.cookies["__prerender_bypass"]) {
+    request.headers["x-prerender-bypass"] = { value: "true" };
   }`;
     }
 

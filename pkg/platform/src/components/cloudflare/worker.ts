@@ -363,8 +363,14 @@ export class Worker extends Component implements Link.Cloudflare.Linkable {
 
     function createScript() {
       return all([handler, args.environment, iamCredentials, bindings]).apply(
-        async ([handler, environment, iamCredentials, bindings]) =>
-          new cf.WorkerScript(
+        async ([handler, environment, iamCredentials, bindings]) => {
+          if (!handler) {
+            throw new Error(
+              "No handler provided to cloudflare/worker.ts createScript()",
+            );
+          }
+
+          return new cf.WorkerScript(
             `${name}Script`,
             transform(args.transform?.worker, {
               name,
@@ -402,7 +408,8 @@ export class Worker extends Component implements Link.Cloudflare.Linkable {
               ],
             }),
             { parent },
-          ),
+          );
+        },
       );
     }
 

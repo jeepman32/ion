@@ -147,22 +147,26 @@ export function createRouter(
     }
 
     function uploadAssets() {
-      return new KvData(
-        `${name}AssetFiles`,
-        {
-          accountId: sst.cloudflare.DEFAULT_ACCOUNT_ID,
-          namespaceId: storage.id,
-          entries: assetManifest.apply((manifest) =>
-            manifest.map((m) => ({
-              source: m.source,
-              key: m.key,
-              hash: m.hash,
-              cacheControl: m.cacheControl,
-              contentType: m.contentType,
-            })),
+      return all([storage.id, assetManifest]).apply(
+        ([storageId, assetManifest]) =>
+          new KvData(
+            `${name}AssetFiles`,
+            {
+              accountId: sst.cloudflare.DEFAULT_ACCOUNT_ID,
+              namespaceId: storageId,
+              entries: assetManifest.map((m) => ({
+                source: m.source,
+                key: m.key,
+                hash: m.hash,
+                cacheControl: m.cacheControl,
+                contentType: m.contentType,
+              })),
+            },
+            {
+              parent,
+              ignoreChanges: $dev ? ["*"] : undefined,
+            },
           ),
-        },
-        { parent, ignoreChanges: $dev ? ["*"] : undefined },
       );
     }
 
@@ -296,15 +300,17 @@ export function validatePlan(input: {
 
 export function createCacheRuleset(
   name: string,
+  cloudflareName: string,
   headers: string[],
   parent: ComponentResource,
 ) {
   return new Ruleset(
-    name,
+    `${parent.urn}${name}Ruleset`,
     {
-      name,
+      // Name of the compression algorithm to use, not anything else. 🙃
+      name: cloudflareName,
       description:
-        "A custom ruleset included by SST as part of a NextJS deployment. It is required to ensure that certain NextJS specific requests are not cached, and are passed through to Workers transparently.",
+        "A custom ruleset included by SST. Do not delete or disable.",
       kind: "custom",
       phase: "httpRequestCacheSettings",
       accountId: sst.cloudflare.DEFAULT_ACCOUNT_ID,
@@ -319,7 +325,7 @@ export function createCacheRuleset(
           // transforming them into something like: http.request.headers contains "foo" or http.request.headers contains "bar"
           expression: headers
             .map(
-              (headerName) => `http.request.headers contains "${headerName}"`,
+              (headerName) => `(http.request.headers contains "${headerName}")`,
             )
             .join(" or "),
           // Turn the rule on, always? Not sure.
