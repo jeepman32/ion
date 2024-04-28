@@ -359,12 +359,6 @@ export class Nextjs extends Component implements Link.Linkable {
     // const revalidationTable = createRevalidationTable();
     // createRevalidationTableSeeder();
 
-    createCacheRuleset(
-      "SST NextJS Cache Passthrough Headers",
-      DEFAULT_CACHE_POLICY_ALLOWED_HEADERS,
-      parent,
-    );
-
     const plan = buildPlan();
     const storage = createKvStorage(parent, name, args);
     const { router, server } = createRouter(
@@ -378,6 +372,12 @@ export class Nextjs extends Component implements Link.Linkable {
 
     removeSourcemaps();
     handleMissingSourcemap();
+    // createCacheRuleset(
+    //   name,
+    //   "SST NextJS Cache Bypass",
+    //   DEFAULT_CACHE_POLICY_ALLOWED_HEADERS,
+    //   parent,
+    // );
 
     this.assets = storage;
     this.router = router;
@@ -401,10 +401,7 @@ export class Nextjs extends Component implements Link.Linkable {
       return all([openNextOutput]).apply(([openNextOutput]) => {
         return validatePlan({
           assets: Object.entries(openNextOutput.origins).reduce(
-            (acc, [key, value]) => {
-              const copy: Parameters<typeof validatePlan>[0]["assets"]["copy"] =
-                [];
-
+            ({ copy }, [key, value]) => {
               if (key === "s3") {
                 if (value.type === "function") {
                   throw new Error(
@@ -417,12 +414,12 @@ export class Nextjs extends Component implements Link.Linkable {
                 }
               }
 
-              return { ...acc, ...copy };
+              return { copy };
             },
-            {} as Parameters<typeof validatePlan>[0]["assets"],
+            { copy: [] } as Parameters<typeof validatePlan>[0]["assets"],
           ),
           routes: openNextOutput.behaviors.reduce(
-            (acc, { pattern, origin: buildOrigin }) => {
+            (routes, { pattern, origin: buildOrigin }) => {
               let origin: "assets" | "server";
 
               // Switch through the routes we've been given by OpenNext and convert them to Cloudflare routes.
@@ -441,15 +438,25 @@ export class Nextjs extends Component implements Link.Linkable {
                   );
               }
 
-              acc.push({
-                regex: pathToRegexp(pattern).source,
+              // path-to-regex doesn't support wildcards. It does support the same behaviour with :splat*.
+              const convertedPattern = pattern.replaceAll("*", ":splat*");
+
+              routes.push({
+                regex: pathToRegexp(convertedPattern).source,
                 origin,
               });
-              return acc;
+              return routes;
             },
             [] as Parameters<typeof validatePlan>[0]["routes"],
           ),
-          server: openNextOutput.origins.default,
+          server: {
+            ...openNextOutput.origins.default,
+            handler: path.join(
+              $cli.paths.root,
+              openNextOutput.origins.default.bundle,
+              "index.mjs",
+            ),
+          },
         }) as Plan;
       });
     }

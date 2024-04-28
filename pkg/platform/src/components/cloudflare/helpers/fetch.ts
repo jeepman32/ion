@@ -35,6 +35,17 @@ export async function cfFetch<ResultType>(
       ...init.headers,
     },
   });
+
+  if (!ret.ok) {
+    throw new Error(
+      `${
+        ret.status
+      }: A request to the Cloudflare API (${resource}) failed. Here's what they sent us:
+====================================================================================================
+${await ret.text()}`,
+    );
+  }
+
   const json = (await ret.json()) as FetchResult<ResultType>;
   // ie.
   // {
