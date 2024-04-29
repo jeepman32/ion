@@ -2,8 +2,7 @@ import fs from "fs";
 import path from "path";
 import { globSync } from "glob";
 import { ComponentResourceOptions, Output, all } from "@pulumi/pulumi";
-import * as pulumiAws from "@pulumi/aws";
-import { Worker as Worker } from "./worker.js";
+import { Worker } from "./worker.js";
 import {
   Plan,
   SsrSiteArgs,
