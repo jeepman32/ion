@@ -1091,14 +1091,220 @@ export class Nextjs extends Component implements Link.Linkable {
       });
     }
 
-    function useCloudFrontFunctionPrerenderBypassHeaderInjection() {
-      // In Next.js page router preview mode (depends on the cookie __prerender_bypass),
-      // to ensure we receive the cached page instead of the preview version, we set the
-      // header "x-prerender-bypass", and add it to cache policy's allowed headers.
+    function useRoutes() {
+      if (_routes) return _routes;
+
+      _routes = all([
+        outputPath,
+        routesManifest,
+        appPathRoutesManifest,
+        appPathsManifest,
+        pagesManifest,
+      ]).apply(
+        ([
+          outputPath,
+          routesManifest,
+          appPathRoutesManifest,
+          appPathsManifest,
+          pagesManifest,
+        ]) => {
+          const dynamicAndStaticRoutes = [
+            ...routesManifest.dynamicRoutes,
+            ...routesManifest.staticRoutes,
+          ].map(({ page, regex }) => {
+            const cwRoute = buildCloudWatchRouteName(page);
+            const cwHash = buildCloudWatchRouteHash(page);
+            const sourcemapPath =
+              getSourcemapForAppRoute(page) || getSourcemapForPagesRoute(page);
+            return {
+              route: page,
+              regexMatch: regex,
+              logGroupPath: `/${cwHash}${cwRoute}`,
+              sourcemapPath: sourcemapPath,
+              sourcemapKey: cwHash,
+            };
+          });
+
+          // Some app routes are not in the routes manifest, so we need to add them
+          // ie. app/api/route.ts => IS NOT in the routes manifest
+          //     app/items/[slug]/route.ts => IS in the routes manifest (dynamicRoutes)
+          const appRoutes = Object.values(appPathRoutesManifest)
+            .filter(
+              (page) =>
+                routesManifest.dynamicRoutes.every(
+                  (route) => route.page !== page,
+                ) &&
+                routesManifest.staticRoutes.every(
+                  (route) => route.page !== page,
+                ),
+            )
+            .map((page) => {
+              const cwRoute = buildCloudWatchRouteName(page);
+              const cwHash = buildCloudWatchRouteHash(page);
+              const sourcemapPath = getSourcemapForAppRoute(page);
+              return {
+                route: page,
+                prefixMatch: page,
+                logGroupPath: `/${cwHash}${cwRoute}`,
+                sourcemapPath: sourcemapPath,
+                sourcemapKey: cwHash,
+              };
+            });
+
+          const dataRoutes = (routesManifest.dataRoutes || []).map(
+            ({ page, dataRouteRegex }) => {
+              const routeDisplayName = page.endsWith("/")
+                ? `/_next/data/BUILD_ID${page}index.json`
+                : `/_next/data/BUILD_ID${page}.json`;
+              const cwRoute = buildCloudWatchRouteName(routeDisplayName);
+              const cwHash = buildCloudWatchRouteHash(page);
+              return {
+                route: routeDisplayName,
+                regexMatch: dataRouteRegex,
+                logGroupPath: `/${cwHash}${cwRoute}`,
+              };
+            },
+          );
+
+          return [
+            ...[...dynamicAndStaticRoutes, ...appRoutes].sort((a, b) =>
+              a.route.localeCompare(b.route),
+            ),
+            ...dataRoutes.sort((a, b) => a.route.localeCompare(b.route)),
+          ];
+
+          function getSourcemapForAppRoute(page: string) {
+            // Step 1: look up in "appPathRoutesManifest" to find the key with
+            //         value equal to the page
+            // {
+            //   "/_not-found": "/_not-found",
+            //   "/about/page": "/about",
+            //   "/about/profile/page": "/about/profile",
+            //   "/page": "/",
+            //   "/favicon.ico/route": "/favicon.ico"
+            // }
+            const appPathRoute = Object.keys(appPathRoutesManifest).find(
+              (key) => appPathRoutesManifest[key] === page,
+            );
+            if (!appPathRoute) return;
+
+            // Step 2: look up in "appPathsManifest" to find the file with key equal
+            //         to the page
+            // {
+            //   "/_not-found": "app/_not-found.js",
+            //   "/about/page": "app/about/page.js",
+            //   "/about/profile/page": "app/about/profile/page.js",
+            //   "/page": "app/page.js",
+            //   "/favicon.ico/route": "app/favicon.ico/route.js"
+            // }
+            const filePath = appPathsManifest[appPathRoute];
+            if (!filePath) return;
+
+            // Step 3: check the .map file exists
+            const sourcemapPath = path.join(
+              outputPath,
+              ".next",
+              "server",
+              `${filePath}.map`,
+            );
+            if (!fs.existsSync(sourcemapPath)) return;
+
+            return sourcemapPath;
+          }
+
+          function getSourcemapForPagesRoute(page: string) {
+            // Step 1: look up in "pathsManifest" to find the file with key equal
+            //         to the page
+            // {
+            //   "/_app": "pages/_app.js",
+            //   "/_error": "pages/_error.js",
+            //   "/404": "pages/404.html",
+            //   "/api/hello": "pages/api/hello.js",
+            //   "/api/auth/[...nextauth]": "pages/api/auth/[...nextauth].js",
+            //   "/api/next-auth-restricted": "pages/api/next-auth-restricted.js",
+            //   "/": "pages/index.js",
+            //   "/ssr": "pages/ssr.js"
+            // }
+            const filePath = pagesManifest[page];
+            if (!filePath) return;
+
+            // Step 2: check the .map file exists
+            const sourcemapPath = path.join(
+              outputPath,
+              ".next",
+              "server",
+              `${filePath}.map`,
+            );
+            if (!fs.existsSync(sourcemapPath)) return;
+
+            return sourcemapPath;
+          }
+        },
+      );
+
+      return _routes;
+    }
+
+    function useCloudFrontFunctionCacheHeaderKey() {
+      // This function is used to improve cache hit ratio by setting the cache key
+      // based on the request headers and the path. `next/image` only needs the
+      // accept header, and this header is not useful for the rest of the query
       return `
-  if (request.cookies["__prerender_bypass"]) {
-    request.headers["x-prerender-bypass"] = { value: "true" };
-  }`;
+function getHeader(key) {
+  var header = request.headers[key];
+  if (header) {
+    if (header.multiValue) {
+      return header.multiValue.map((header) => header.value).join(",");
+    }
+    if (header.value) {
+      return header.value;
+    }
+  }
+  return "";
+}
+var cacheKey = "";
+if (request.uri.startsWith("/_next/image")) {
+  cacheKey = getHeader("accept");
+} else {
+  cacheKey =
+    getHeader("rsc") +
+    getHeader("next-router-prefetch") +
+    getHeader("next-router-state-tree") +
+    getHeader("next-url") +
+    getHeader("x-prerender-revalidate");
+}
+if (request.cookies["__prerender_bypass"]) {
+  cacheKey += request.cookies["__prerender_bypass"]
+    ? request.cookies["__prerender_bypass"].value
+    : "";
+}
+var crypto = require("crypto");
+
+var hashedKey = crypto.createHash("md5").update(cacheKey).digest("hex");
+request.headers["x-open-next-cache-key"] = { value: hashedKey };
+`;
+    }
+
+    function useCloudfrontGeoHeadersInjection() {
+      // Inject the CloudFront viewer country, region, latitude, and longitude headers into the request headers
+      // for OpenNext to use them
+      return `
+if(request.headers["cloudfront-viewer-city"]) {
+  request.headers["x-open-next-city"] = request.headers["cloudfront-viewer-city"];
+}
+if(request.headers["cloudfront-viewer-country"]) {
+  request.headers["x-open-next-country"] = request.headers["cloudfront-viewer-country"];
+}
+if(request.headers["cloudfront-viewer-region"]) {
+  request.headers["x-open-next-region"] = request.headers["cloudfront-viewer-region"];
+}
+if(request.headers["cloudfront-viewer-latitude"]) {
+  request.headers["x-open-next-latitude"] = request.headers["cloudfront-viewer-latitude"];
+}
+if(request.headers["cloudfront-viewer-longitude"]) {
+  request.headers["x-open-next-longitude"] = request.headers["cloudfront-viewer-longitude"];
+}
+    `;
     }
 
     function handleMissingSourcemap() {
