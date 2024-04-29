@@ -62,7 +62,7 @@ export class Kv extends Component implements Link.Cloudflare.Linkable {
 
     function createNamespace() {
       return new cloudflare.WorkersKvNamespace(
-        `${name}Namespace`,
+        `${name}${Math.random().toString().split(".")[1]}Namespace`,
         transform(args?.transform?.namespace, {
           title: name,
           accountId: sst.cloudflare.DEFAULT_ACCOUNT_ID,

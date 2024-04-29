@@ -31,7 +31,7 @@ export async function build(name: string, input: pulumi.Unwrap<WorkerArgs>) {
     // entryPoints: [path.resolve(input.handler)],
     stdin: {
       contents: `
-      import handler from "${path.join(parsed.dir, parsed.name)}"
+      import handler from "${path.join(parsed.dir, parsed.name + parsed.ext)}"
       import { wrapCloudflareHandler } from "sst"
       export default wrapCloudflareHandler(handler)
       `,
@@ -50,12 +50,29 @@ export async function build(name: string, input: pulumi.Unwrap<WorkerArgs>) {
           });
         },
       },
+      {
+        name: "open-next-helper",
+        setup: (build) => {
+          build.onResolve(
+            {
+              filter:
+                /\.\/cjs\/react-(dom-server\.edge|jsx-dev-runtime)\.development\.js/,
+            },
+            (args) => ({
+              path: path.join(
+                $cli.paths.root,
+                "node_modules/react-dom",
+                args.path.slice(1, args.path.length),
+              ),
+            }),
+          );
+        },
+      },
     ],
-
     loader: build.loader,
     keepNames: true,
     bundle: true,
-    logLevel: "silent",
+    logLevel: "debug",
     metafile: true,
     format: "esm",
     target: "esnext",
@@ -64,15 +81,19 @@ export async function build(name: string, input: pulumi.Unwrap<WorkerArgs>) {
     sourcemap: false,
     conditions: ["worker"],
     minify: build.minify,
+    treeShaking: true,
     ...build.esbuild,
-    external: [
-      ...(build.esbuild?.external ?? []),
-      "cloudflare:workers"
-    ],
+    external: [...(build.esbuild?.external ?? []), "cloudflare:workers"],
     banner: {
       js: [build.banner || "", build.esbuild?.banner || ""].join("\n"),
     },
+    absWorkingDir: $cli.paths.root,
+    define: {
+      "process.env.TURBOPACK": "false",
+    },
+    nodePaths: [path.resolve($cli.paths.root, "node_modules")],
   };
+
   const ctx = await esbuild.context(options);
 
   try {
