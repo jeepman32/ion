@@ -72,6 +72,7 @@ export async function build(name: string, input: pulumi.Unwrap<WorkerArgs>) {
     loader: build.loader,
     keepNames: true,
     bundle: true,
+    // Adjust this to modify logging output
     logLevel: "debug",
     metafile: true,
     format: "esm",
@@ -81,17 +82,20 @@ export async function build(name: string, input: pulumi.Unwrap<WorkerArgs>) {
     sourcemap: false,
     conditions: ["worker"],
     minify: build.minify,
-    treeShaking: true,
     ...build.esbuild,
     external: [...(build.esbuild?.external ?? []), "cloudflare:workers"],
     banner: {
       js: [build.banner || "", build.esbuild?.banner || ""].join("\n"),
     },
+    // open-next output debugging additions
     absWorkingDir: $cli.paths.root,
     define: {
+      // Disable turbopack as the output was wanting react-dom-turbopack stuff.
+      // May be worthwhile testing with it enabled, as turbopack is where Vercel want to be.
       "process.env.TURBOPACK": "false",
     },
     nodePaths: [path.resolve($cli.paths.root, "node_modules")],
+    treeShaking: true,
   };
 
   const ctx = await esbuild.context(options);
@@ -103,23 +107,25 @@ export async function build(name: string, input: pulumi.Unwrap<WorkerArgs>) {
       type: "success" as const,
       handler: target,
     };
+    // Disable error formatter as it's blocking some errors from rendering.
   } catch (ex: any) {
-    const result = ex as BuildResult;
-    if ("errors" in result) {
-      return {
-        type: "error" as const,
-        errors: result.errors.flatMap((x) => [
-          console.log(x.text),
-          x.location?.file || "",
-          console.log(x.location?.line, "│", x.location?.lineText),
-        ]),
-      };
-    }
+    // const result = ex as BuildResult;
+    // if ("errors" in result) {
+    //   return {
+    //     type: "error" as const,
+    //     errors: result.errors.flatMap((x) => [
+    //       console.log(x.text),
+    //       x.location?.file || "",
+    //       console.log(x.location?.line, "│", x.location?.lineText),
+    //     ]),
+    //   };
+    // }
 
-    return {
-      type: "error" as const,
-      errors: [ex.toString()],
-    };
+    // return {
+    //   type: "error" as const,
+    //   errors: [ex.toString()],
+    // };
+    throw ex;
   } finally {
     ctx.dispose();
   }
