@@ -90,7 +90,8 @@ export async function build(name: string, input: pulumi.Unwrap<WorkerArgs>) {
     // open-next output debugging additions
     absWorkingDir: $cli.paths.root,
     define: {
-      // Disable turbopack as the output was wanting react-dom-turbopack stuff.
+      // Disable turbopack as the output was wanting react-server-dom-turbopack,
+      // which appears to be generated as part of the build, but for me it wasn't present.
       // May be worthwhile testing with it enabled, as turbopack is where Vercel want to be.
       "process.env.TURBOPACK": "false",
     },
