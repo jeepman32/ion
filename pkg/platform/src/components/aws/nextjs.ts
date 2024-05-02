@@ -18,6 +18,7 @@ import {
 import { Cdn } from "./cdn.js";
 import { Bucket } from "./bucket.js";
 import { Component } from "../component.js";
+import { Hint } from "../hint.js";
 import { Link } from "../link.js";
 import { VisibleError } from "../error.js";
 import type { Input } from "../input.js";
@@ -25,8 +26,16 @@ import { Cache } from "./providers/cache.js";
 import { Queue } from "./queue.js";
 import { buildApp } from "../base/base-ssr-site.js";
 
-const DEFAULT_OPEN_NEXT_VERSION = "3.0.0-rc.16";
-const DEFAULT_CACHE_POLICY_ALLOWED_HEADERS = ["x-open-next-cache-key"];
+const DEFAULT_OPEN_NEXT_VERSION = "3.0.0-rc.11";
+const DEFAULT_CACHE_POLICY_ALLOWED_HEADERS = [
+  "accept",
+  "x-prerender-revalidate",
+  "x-prerender-bypass",
+  "rsc",
+  "next-router-prefetch",
+  "next-router-state-tree",
+  "next-url",
+];
 
 type BaseFunction = {
   handler: string;
@@ -342,37 +351,7 @@ export interface NextjsArgs extends SsrSiteArgs {
      * ```
      */
     memory?: Size;
-    /**
-     * If set to true, already computed image will return 304 Not Modified.
-     * This means that image needs to be **immutable**, the etag will be computed
-     * based on the image href, format and width and the next BUILD_ID.
-     * @default false
-     * @example
-     * ```js
-     * {
-     *   imageOptimization: {
-     *     staticEtag: true,
-     *   }
-     * }
-     */
-    staticEtag?: boolean;
   };
-  /**
-   * Configure the [server function](#nodes-server) in your Next.js app to connect
-   * to private subnets in a virtual private cloud or VPC. This allows your app to
-   * access private resources.
-   *
-   * @example
-   * ```js
-   * {
-   *   vpc: {
-   *     securityGroups: ["sg-0399348378a4c256c"],
-   *     subnets: ["subnet-0b6a2b73896dc8c4c", "subnet-021389ebee680c2f0"]
-   *   }
-   * }
-   * ```
-   */
-  vpc?: SsrSiteArgs["vpc"];
 }
 
 /**
@@ -488,8 +467,8 @@ export class Nextjs extends Component implements Link.Linkable {
       _hint: $dev
         ? undefined
         : all([this.cdn.domainUrl, this.cdn.url]).apply(
-            ([domainUrl, url]) => domainUrl ?? url,
-          ),
+          ([domainUrl, url]) => domainUrl ?? url,
+        ),
       _metadata: {
         mode: $dev ? "placeholder" : "deployed",
         path: sitePath,
@@ -771,39 +750,39 @@ export class Nextjs extends Component implements Link.Linkable {
               },
               ...(revalidationQueueArn
                 ? [
-                    {
-                      actions: [
-                        "sqs:SendMessage",
-                        "sqs:GetQueueAttributes",
-                        "sqs:GetQueueUrl",
-                      ],
-                      resources: [revalidationQueueArn],
-                    },
-                  ]
+                  {
+                    actions: [
+                      "sqs:SendMessage",
+                      "sqs:GetQueueAttributes",
+                      "sqs:GetQueueUrl",
+                    ],
+                    resources: [revalidationQueueArn],
+                  },
+                ]
                 : []),
               ...(revalidationTableArn
                 ? [
-                    {
-                      actions: [
-                        "dynamodb:BatchGetItem",
-                        "dynamodb:GetRecords",
-                        "dynamodb:GetShardIterator",
-                        "dynamodb:Query",
-                        "dynamodb:GetItem",
-                        "dynamodb:Scan",
-                        "dynamodb:ConditionCheckItem",
-                        "dynamodb:BatchWriteItem",
-                        "dynamodb:PutItem",
-                        "dynamodb:UpdateItem",
-                        "dynamodb:DeleteItem",
-                        "dynamodb:DescribeTable",
-                      ],
-                      resources: [
-                        revalidationTableArn,
-                        `${revalidationTableArn}/*`,
-                      ],
-                    },
-                  ]
+                  {
+                    actions: [
+                      "dynamodb:BatchGetItem",
+                      "dynamodb:GetRecords",
+                      "dynamodb:GetShardIterator",
+                      "dynamodb:Query",
+                      "dynamodb:GetItem",
+                      "dynamodb:Scan",
+                      "dynamodb:ConditionCheckItem",
+                      "dynamodb:BatchWriteItem",
+                      "dynamodb:PutItem",
+                      "dynamodb:UpdateItem",
+                      "dynamodb:DeleteItem",
+                      "dynamodb:DescribeTable",
+                    ],
+                    resources: [
+                      revalidationTableArn,
+                      `${revalidationTableArn}/*`,
+                    ],
+                  },
+                ]
                 : []),
             ],
           };
@@ -814,8 +793,7 @@ export class Nextjs extends Component implements Link.Linkable {
               serverCfFunction: {
                 injections: [
                   useCloudFrontFunctionHostHeaderInjection(),
-                  useCloudFrontFunctionCacheHeaderKey(),
-                  useCloudfrontGeoHeadersInjection(),
+                  useCloudFrontFunctionPrerenderBypassHeaderInjection(),
                 ],
               },
             },
@@ -863,9 +841,6 @@ export class Nextjs extends Component implements Link.Linkable {
                           environment: {
                             BUCKET_NAME: bucketName,
                             BUCKET_KEY_PREFIX: "_assets",
-                            ...(imageOptimization?.staticEtag
-                              ? { OPENNEXT_STATIC_ETAG: "true" }
-                              : {}),
                           },
                           memory: imageOptimization?.memory ?? "1536 MB",
                         },
@@ -1245,66 +1220,14 @@ export class Nextjs extends Component implements Link.Linkable {
       return _routes;
     }
 
-    function useCloudFrontFunctionCacheHeaderKey() {
-      // This function is used to improve cache hit ratio by setting the cache key
-      // based on the request headers and the path. `next/image` only needs the
-      // accept header, and this header is not useful for the rest of the query
+    function useCloudFrontFunctionPrerenderBypassHeaderInjection() {
+      // In Next.js page router preview mode (depends on the cookie __prerender_bypass),
+      // to ensure we receive the cached page instead of the preview version, we set the
+      // header "x-prerender-bypass", and add it to cache policy's allowed headers.
       return `
-function getHeader(key) {
-  var header = request.headers[key];
-  if (header) {
-    if (header.multiValue) {
-      return header.multiValue.map((header) => header.value).join(",");
-    }
-    if (header.value) {
-      return header.value;
-    }
-  }
-  return "";
-}
-var cacheKey = "";
-if (request.uri.startsWith("/_next/image")) {
-  cacheKey = getHeader("accept");
-} else {
-  cacheKey =
-    getHeader("rsc") +
-    getHeader("next-router-prefetch") +
-    getHeader("next-router-state-tree") +
-    getHeader("next-url") +
-    getHeader("x-prerender-revalidate");
-}
-if (request.cookies["__prerender_bypass"]) {
-  cacheKey += request.cookies["__prerender_bypass"]
-    ? request.cookies["__prerender_bypass"].value
-    : "";
-}
-var crypto = require("crypto");
-
-var hashedKey = crypto.createHash("md5").update(cacheKey).digest("hex");
-request.headers["x-open-next-cache-key"] = { value: hashedKey };
-`;
-    }
-
-    function useCloudfrontGeoHeadersInjection() {
-      // Inject the CloudFront viewer country, region, latitude, and longitude headers into the request headers
-      // for OpenNext to use them
-      return `
-if(request.headers["cloudfront-viewer-city"]) {
-  request.headers["x-open-next-city"] = request.headers["cloudfront-viewer-city"];
-}
-if(request.headers["cloudfront-viewer-country"]) {
-  request.headers["x-open-next-country"] = request.headers["cloudfront-viewer-country"];
-}
-if(request.headers["cloudfront-viewer-region"]) {
-  request.headers["x-open-next-region"] = request.headers["cloudfront-viewer-region"];
-}
-if(request.headers["cloudfront-viewer-latitude"]) {
-  request.headers["x-open-next-latitude"] = request.headers["cloudfront-viewer-latitude"];
-}
-if(request.headers["cloudfront-viewer-longitude"]) {
-  request.headers["x-open-next-longitude"] = request.headers["cloudfront-viewer-longitude"];
-}
-    `;
+  if (request.cookies["__prerender_bypass"]) { 
+    request.headers["x-prerender-bypass"] = { value: "true" }; 
+  }`;
     }
 
     function handleMissingSourcemap() {

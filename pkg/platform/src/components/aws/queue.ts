@@ -4,6 +4,7 @@ import { Component, Transform, transform } from "../component";
 import { Link } from "../link";
 import type { Input } from "../input";
 import { Function, FunctionArgs } from "./function";
+import { DurationMinutes, toSeconds } from "../duration";
 import { VisibleError } from "../error";
 import { hashStringToPrettyString, sanitizeToPascalCase } from "../naming";
 import { parseQueueArn } from "./helpers/arn";
@@ -162,8 +163,7 @@ export interface QueueSubscriber {
  */
 export class Queue
   extends Component
-  implements Link.Linkable, Link.AWS.Linkable
-{
+  implements Link.Linkable, Link.AWS.Linkable {
   private constructorName: string;
   private queue: aws.sqs.Queue;
   private isSubscribed: boolean = false;

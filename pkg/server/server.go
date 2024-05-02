@@ -10,7 +10,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync/atomic"
-	"syscall"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/sts"
@@ -246,7 +245,7 @@ func (s *Server) Start(parentContext context.Context) error {
 
 	port, err := findAvailablePort()
 	if err != nil {
-		return err
+		return ErrServerAlreadyRunning
 	}
 	s.server.Addr = fmt.Sprintf("0.0.0.0:%d", port)
 	slog.Info("server", "addr", s.server.Addr)
@@ -327,13 +326,6 @@ func (s *Server) broadcast(event *Event) {
 func findAvailablePort() (int, error) {
 	listener, err := net.Listen("tcp", "localhost:13557")
 	if err != nil {
-		if opError, ok := err.(*net.OpError); ok && opError.Op == "listen" {
-			if syscallErr, ok := opError.Err.(*os.SyscallError); ok && syscallErr.Syscall == "bind" {
-				if errno, ok := syscallErr.Err.(syscall.Errno); ok && errno == syscall.EADDRINUSE {
-					return 0, ErrServerAlreadyRunning
-				}
-			}
-		}
 		return 0, err
 	}
 	defer listener.Close()
